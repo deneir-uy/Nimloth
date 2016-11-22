@@ -5,51 +5,114 @@
  */
 package fileSystem;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Scanner;
 
 /**
  *
  * @author deneir-uy
  */
-
-/*
- *
- * Mao pa jud ni, sir. I was sick.
- *
- */
 class Node {
     Node parent;
-    List<Node> children;
+    HashMap<Node, String> children;
     boolean isDirectory;
+    File file;
     
+    Node() {
+        this.isDirectory = true;
+    }
+    
+    Node(File file) {
+        this.isDirectory = false;
+        this.file = file;
+    }
+
+}
+
+class File {
+    String filename;
+    String contents;
+    
+    File(String filename , String contents) {
+        this.filename = filename;
+        this.contents = contents;
+    }
 }
 
 class Tree {
-    private Node root;
     
+    private Node root;
+
     Tree(Node root) {
         this.root = root;
     }
-    
-    public void insert() {
+
+    public void insert(Node node) {
         
     }
-    
-    public void delete() {
-        
+
+    public void delete(String key) {
+
     }
-    
-    public void search() {
-        
+
+    public void search(String key) {
+
     }
 }
 
-public class File_system {
-    
-    public static void main(String[] args) {
-        Node root = new Node();
-        Tree fileSystem = new Tree(root);
+class Simulation {
+    String hostname;
+    String currentDirectory;
+    String prompt;
+    Tree fileTree;
+    boolean exit;
+
+    Simulation(Tree fileTree) {
+        this.fileTree = fileTree;
+        this.hostname = "user@hostname: ";
+        this.currentDirectory = "/";
+        this.prompt = hostname + currentDirectory + " $ ";
+        this.exit = false;
     }
     
+    public void showPrompt() {
+        System.out.print(prompt);
+    }
     
+    public void takeCommand(String command) {
+        String cmd = command.substring(0, command.indexOf(" "));
+        String args = command.substring(command.indexOf(" ") + 1, command.length());
+        
+        switch(cmd){
+            case "print":
+                print(args);
+                break;
+        }
+    }
+    
+    private void print(String args) {
+        System.out.println(args);
+    }
+    
+}
+
+public class File_system {
+
+    public static void main(String[] args) {
+        Node root = new Node();
+        Tree fileTree = new Tree(root);
+        Simulation simulate = new Simulation(fileTree);
+        
+        do{
+            Scanner scan = new Scanner(System.in);
+            String command;
+            simulate.showPrompt();
+            
+            command = scan.nextLine();
+            simulate.takeCommand(command);
+            
+        } while (!simulate.exit);
+    }
+
 }
