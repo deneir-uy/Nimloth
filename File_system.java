@@ -17,8 +17,11 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Scanner;
 import java.util.regex.Pattern;
 import javax.swing.BoxLayout;
@@ -55,7 +58,8 @@ class Node implements Serializable {
     }
 
     public void listContents(String args) {
-        String format = "%-30s%-10s%-22s%s%n";
+        int space = getLongestName() + 3;
+        String format = "%-" + Integer.toString(space) + "s%-9s%-22s%s%n";
         String pattern = "hh:mma MMM/dd/yyyy";
         SimpleDateFormat dateFormat = new SimpleDateFormat(pattern);
 
@@ -75,10 +79,33 @@ class Node implements Serializable {
             }
         });
     }
-    
+
+    private int getLongestName() {
+        int longest = 0;
+
+        Iterator iChildren = children.entrySet().iterator();
+        Iterator iFiles = files.entrySet().iterator();
+        
+        while (iChildren.hasNext()) {
+            HashMap.Entry pair = (HashMap.Entry) iChildren.next();
+            if (pair.getKey().toString().length() > longest) {
+                longest = pair.getKey().toString().length();
+            }
+        }
+        
+        while (iFiles.hasNext()) {
+            HashMap.Entry pair = (HashMap.Entry) iFiles.next();
+            if (pair.getKey().toString().length() > longest) {
+                longest = pair.getKey().toString().length();
+            }
+        }
+
+        return longest;
+    }
+
     public void updateDates() {
         Date date = new Date();
-        
+
         children.entrySet().stream().map((entry) -> (Node) children.get(entry.getKey())).forEach((child) -> {
             child.info.setDateCreated(date);
             child.info.setDateLastModified(date);
@@ -295,12 +322,11 @@ class Tree implements Serializable {
                 preNode.children.get(filename).parent = preNode.parent;
                 preNode.children.remove(filename);
                 preNode.parent.children.put(filename, moveNode);
-            }
-            else {
+            } else {
                 System.out.println(address[0] + ": no such directory found");
             }
         } else {
-            
+
             for (String addres : address) {
                 if (!addres.equals("")) {
                     currentNode = changeDirectory(addres.trim());
@@ -335,12 +361,11 @@ class Tree implements Serializable {
                 preNode.files.get(filename).parent = preNode.parent;
                 preNode.files.remove(filename);
                 preNode.parent.files.put(filename, moveNode);
-            }
-            else {
+            } else {
                 System.out.println(address[0] + ": no such directory found");
             }
         } else {
-            
+
             for (int i = 0; i < address.length; i++) {
                 if (!address[i].equals("")) {
                     currentNode = checkIfDirectory(address[i].trim());
@@ -359,8 +384,8 @@ class Tree implements Serializable {
 
         }
     }
-    
-    public void copyDirectory (String filename, String[] address, Node preNode) {
+
+    public void copyDirectory(String filename, String[] address, Node preNode) {
         Date date = new Date();
         Node copyNode = new Node(filename, preNode, date);
 
@@ -377,12 +402,11 @@ class Tree implements Serializable {
                 preNode.children.get(filename).parent = preNode.parent;
                 copyNode.updateDates();
                 preNode.parent.children.put(filename, copyNode);
-            }
-            else {
+            } else {
                 System.out.println(address[0] + ": no such directory found");
             }
         } else {
-            
+
             for (String addres : address) {
                 if (!addres.equals("")) {
                     currentNode = changeDirectory(addres.trim());
@@ -392,17 +416,17 @@ class Tree implements Serializable {
             if (currentNode == null) {
                 return;
             }
-            
+
             copyNode.updateDates();
             copyNode.parent = currentNode;
             currentNode.children.put(filename, copyNode);
 
         }
     }
-    
-    public void copyFile (String filename, String[] address, Node preNode) {
+
+    public void copyFile(String filename, String[] address, Node preNode) {
         Date date = new Date();
-        Node copyNode = new Node(filename, preNode, 
+        Node copyNode = new Node(filename, preNode,
                 preNode.files.get(filename).info.getContents(), date);
         String newFilename = filename;
 
@@ -416,14 +440,13 @@ class Tree implements Serializable {
             } else if (address[0].equals("..")) {
                 preNode.files.get(filename).parent = preNode.parent;
                 preNode.parent.files.put(filename, copyNode);
-            }
-            else {
+            } else {
                 copyNode.info.setFilename(address[0]);
                 copyNode.key = address[0];
                 preNode.files.put(address[0], copyNode);
             }
         } else {
-            
+
             for (int i = 0; i < address.length; i++) {
                 if (!address[i].equals("")) {
                     currentNode = checkIfDirectory(address[i].trim());
@@ -441,25 +464,25 @@ class Tree implements Serializable {
 
         }
     }
-    
+
     public void renameDirectory(String filename, String newFilename) {
         Node renamedNode = currentNode.children.get(filename);
-        
+
         currentNode.children.remove(filename);
         renamedNode.info.setFilename(newFilename);
         renamedNode.key = newFilename;
         currentNode.children.put(newFilename, renamedNode);
     }
-    
+
     public void renameFile(String filename, String newFilename) {
         Node renamedNode = currentNode.files.get(filename);
-        
+
         currentNode.files.remove(filename);
         renamedNode.info.setFilename(newFilename);
         renamedNode.key = newFilename;
         currentNode.files.put(newFilename, renamedNode);
     }
-    
+
     private Node checkIfDirectory(String key) {
         if (key.equals("..")) {
             if (currentNode.parent != null) {
@@ -744,9 +767,9 @@ class Simulation {
         if (address[0].equals("root")) {
             tree.currentNode = tree.root;
         }
-        
+
         if (address.length > 1) {
-            
+
             for (int i = 0; i < address.length - 1; i++) {
                 if (!address[i].equals("")) {
                     tree.currentNode = tree.changeDirectory(address[i].trim());
@@ -771,10 +794,10 @@ class Simulation {
         panel.add(scrlpaneFile);
         frame.add(panel);
         panel.add(save);
-        
-        if(tree.currentNode.files.containsKey(address[address.length - 1]))
+
+        if (tree.currentNode.files.containsKey(address[address.length - 1])) {
             txtarFile.setText(tree.currentNode.files.get(address[address.length - 1]).info.getContents());
-        else{
+        } else {
             System.out.println(address[address.length - 1] + ": no such file");
             tree.currentNode = preNode;
             return;
@@ -800,9 +823,9 @@ class Simulation {
         if (address[0].equals("root")) {
             tree.currentNode = tree.root;
         }
-        
+
         if (address.length > 1) {
-            
+
             for (int i = 0; i < address.length - 1; i++) {
                 if (!address[i].equals("")) {
                     tree.currentNode = tree.changeDirectory(address[i].trim());
@@ -827,10 +850,10 @@ class Simulation {
         panel.add(scrlpaneFile);
         frame.add(panel);
         panel.add(save);
-        
-        if(tree.currentNode.files.containsKey(address[address.length - 1]))
+
+        if (tree.currentNode.files.containsKey(address[address.length - 1])) {
             txtarFile.setText(tree.currentNode.files.get(address[address.length - 1]).info.getContents());
-        else{
+        } else {
             System.out.println(address[address.length - 1] + ": no such file");
             tree.currentNode = preNode;
             return;
@@ -871,9 +894,9 @@ class Simulation {
         if (address[0].equals("root")) {
             tree.currentNode = tree.root;
         }
-        
+
         if (address.length > 1) {
-            
+
             for (int i = 0; i < address.length - 1; i++) {
                 if (!address[i].equals("")) {
                     tree.currentNode = tree.changeDirectory(address[i].trim());
@@ -897,10 +920,10 @@ class Simulation {
         panel.add(scrlpaneFile);
         frame.add(panel);
         txtarFile.setEditable(false);
-        
-        if(tree.currentNode.files.containsKey(address[address.length - 1]))
+
+        if (tree.currentNode.files.containsKey(address[address.length - 1])) {
             txtarFile.setText(tree.currentNode.files.get(address[address.length - 1]).info.getContents());
-        else{
+        } else {
             System.out.println(address[address.length - 1] + ": no such file");
             tree.currentNode = preNode;
             return;
@@ -920,7 +943,7 @@ class Simulation {
 
         if (args.trim().contains(" ")) {
             address = argsSplit[1].split("/");
-            
+
             if (address[0].equals("root")) {
                 tree.currentNode = tree.root;
             }
@@ -937,7 +960,7 @@ class Simulation {
         } else {
             System.out.println("usage: mv source_file/source_directory target_file/target_directory");
         }
-        
+
         tree.currentNode = preNode;
     }
 
@@ -945,10 +968,9 @@ class Simulation {
         String[] argsSplit = args.split(" ");
         String filename = argsSplit[0].trim();
 
-
         if (args.trim().contains(" ")) {
             String newFilename = argsSplit[1].trim();
-            
+
             if (tree.currentNode.children.containsKey(filename)) {
                 tree.renameDirectory(filename, newFilename);
             } else if (tree.currentNode.files.containsKey(filename)) {
@@ -970,7 +992,7 @@ class Simulation {
 
         if (args.trim().contains(" ")) {
             address = argsSplit[1].split("/");
-            
+
             if (address[0].equals("root")) {
                 tree.currentNode = tree.root;
             }
@@ -987,7 +1009,7 @@ class Simulation {
         } else {
             System.out.println("usage: cp source_file/source_directory target_file/target_directory");
         }
-        
+
         tree.currentNode = preNode;
     }
 
