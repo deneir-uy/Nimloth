@@ -9,12 +9,20 @@ import java.awt.GridLayout;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.WindowEvent;
-import java.text.NumberFormat;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Scanner;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -24,16 +32,18 @@ import javax.swing.JTextArea;
  *
  * @author deneir-uy
  */
-class Node {
+class Node implements Serializable {
 
     Node parent;
     HashMap<String, Node> children;
+    HashMap<String, Node> files;
     Descriptor info;
     String key;
 
     Node(String address, Node parent, Date date) {
         this.parent = parent;
         this.children = new HashMap<>();
+        this.files = new HashMap<>();
         this.info = new Descriptor(address, date);
         this.key = address;
     }
@@ -44,20 +54,28 @@ class Node {
 
     }
 
-    public void listChildren() {
-        children.entrySet().stream().map((entry) -> (Node) children.get(entry.getKey())).forEach((child) -> {
-            String isDirectory = "File";
+    public void listContents() {
+        String format = "%-30s%-10s%-22s%s%n";
+        String pattern = "hh:mma MMM/dd/yyyy";
+        SimpleDateFormat dateFormat = new SimpleDateFormat(pattern);
 
-            if (child.info.isDirectory) {
-                isDirectory = "Folder";
-            }
+        children.entrySet().stream().map((entry) -> (Node) 
+                children.get(entry.getKey())).forEach((child) -> {
+            System.out.printf(format, child.info.getFilename(), "Folder", 
+                    dateFormat.format(child.info.getDateCreated()), 
+                    dateFormat.format(child.info.getDateLastModified()));
+            //System.out.println(child.info.getFilename() + "\t\tFolder\t" + child.info.getDateCreated() + "\t" + child.info.getDateLastModified());
+        });
 
-            System.out.println(child.info.getFilename() + "\t\t" + isDirectory + "\t" + child.info.getDateCreated() + "\t" + child.info.getDateLastModified());
+        files.entrySet().stream().map((entry) -> (Node) files.get(entry.getKey())).forEach((file) -> {
+            System.out.printf(format, file.info.getFilename(), "File", 
+                    dateFormat.format(file.info.getDateCreated()), 
+                    dateFormat.format(file.info.getDateLastModified()));
         });
     }
 }
 
-class Descriptor {
+class Descriptor implements Serializable {
 
     private String filename;
     private String contents;
@@ -115,7 +133,7 @@ class Descriptor {
 
 }
 
-class Tree {
+class Tree implements Serializable {
 
     Node root, currentNode;
 
@@ -146,16 +164,17 @@ class Tree {
                 }
             }
             Node newNode = new Node(name, currentNode, date);
-            
-            if(currentNode == null) {
+
+            if (currentNode == null) {
                 return;
             }
-            
+
             currentNode.children.put(name, newNode);
         }
     }
 
     public void removeDirectory(String[] key) {
+        String filename = key[key.length - 1].trim();
 
         if (key.length == 1) {
             currentNode.children.remove(key[0].trim());
@@ -166,12 +185,14 @@ class Tree {
                     currentNode = changeDirectory(key[i].trim());
                 }
             }
-            
-            if(currentNode == null) {
+
+            if (currentNode == null) {
                 return;
             }
-            
-            currentNode.children.remove(key[key.length - 1].trim());
+
+            if (currentNode.children.containsKey(filename)) {
+                currentNode.children.remove(filename);
+            }
         }
     }
 
@@ -180,9 +201,9 @@ class Tree {
 
         if (key.length == 1) {
             Node newNode = new Node(name, currentNode, contents, date);
-            currentNode.children.put(name, newNode);
+            currentNode.files.put(name, newNode);
         } else {
-            Node currNode = root;
+            Node currNode = currentNode;
 
             for (int i = 0; i < key.length - 1; i++) {
                 if (!key[i].equals("")) {
@@ -190,26 +211,26 @@ class Tree {
                 }
             }
             Node newNode = new Node(name, currNode, date);
-            currNode.children.put(name, newNode);
+            currNode.files.put(name, newNode);
         }
     }
 
     public void updateFile(String[] key, String contents, Date date) {
         String name = key[key.length - 1].substring(key[key.length - 1].lastIndexOf(">") + 1).trim();
         if (key.length == 1) {
-            currentNode.children.get(name).info.setContents(contents);
-            currentNode.children.get(name).info.setDateLastModified(date);
+            currentNode.files.get(name).info.setContents(contents);
+            currentNode.files.get(name).info.setDateLastModified(date);
 
         } else {
-            Node currNode = root;
+            Node currNode = currentNode;
 
             for (int i = 0; i < key.length - 1; i++) {
                 if (!key[i].equals("")) {
                     currNode = changeDirectory(key[i].trim());
                 }
             }
-            currNode.children.get(name).info.setContents(contents);
-            currNode.children.get(name).info.setDateLastModified(date);
+            currNode.files.get(name).info.setContents(contents);
+            currNode.files.get(name).info.setDateLastModified(date);
         }
     }
 
@@ -227,13 +248,13 @@ class Tree {
             if (toChange.info.isDirectory) {
                 return toChange;
             } else {
-                System.out.println("'" + key + "' is not a directory");
+                System.out.println("cd: " + key + ": is not a directory");
                 return null;
             }
         } else if (key.equals("root")) {
             return root;
         } else {
-            System.out.println("'" + key + "' directory not found");
+            System.out.println("cd: " + key + ": no such file or directory");
             return null;
         }
     }
@@ -273,7 +294,7 @@ class Simulation {
         System.out.print(prompt);
     }
 
-    public void takeCommand(String command) {
+    public void takeCommand(String command) throws InterruptedException {
         String cmd, args = "";
         command = command.trim();
         if (command.contains(" ")) {
@@ -299,8 +320,14 @@ class Simulation {
             case "ls":
                 listChildren(args);
                 break;
-            case "cat":
+            case ">":
                 createFile(args);
+                break;
+            case ">>":
+                appendFile(args);
+                break;
+            case "edit":
+                editFile(args);
                 break;
             case "show":
                 showFile(args);
@@ -318,15 +345,15 @@ class Simulation {
             String[] address = args.split("/");
             Date date = new Date();
             Node preNode = tree.currentNode;
-            
+
             if (address[0].equals("root")) {
                 tree.currentNode = tree.root;
             }
-            
+
             tree.makeDirectory(address, date);
             tree.currentNode = preNode;
         } else {
-            System.out.println("invalid: empty filename");
+            System.out.println("usage: mkdir <directory name>");
         }
     }
 
@@ -334,15 +361,15 @@ class Simulation {
         if (!args.isEmpty()) {
             String[] address = args.split("/");
             Node preNode = tree.currentNode;
-            
+
             if (address[0].equals("root")) {
                 tree.currentNode = tree.root;
             }
-            
+
             tree.removeDirectory(address);
             tree.currentNode = preNode;
         } else {
-            System.out.println("invalid: empty filename");
+            System.out.println("usage: rmdir <directory name>");
         }
     }
 
@@ -367,18 +394,18 @@ class Simulation {
                 }
             }
         } else {
-            System.out.println("invalid: empty filename");
+            System.out.println("usage: cd <directory name>");
         }
 
     }
 
     private void listChildren(String args) {
         if (args.isEmpty()) {
-            tree.currentNode.listChildren();
+            tree.currentNode.listContents();
         } else {
             String[] address = args.split("/");
             Node preNode = tree.currentNode;
-            
+
             if (address[0].equals("root")) {
                 tree.currentNode = tree.root;
             }
@@ -390,56 +417,120 @@ class Simulation {
             }
 
             if (tree.currentNode != null) {
-                tree.currentNode.listChildren();
+                tree.currentNode.listContents();
             }
-            
+
             tree.currentNode = preNode;
         }
     }
 
     private void createFile(String args) {
-        String[] address = args.split("/");
+        String[] address = args.substring(args.lastIndexOf(">") + 1, 
+                args.length()).trim().split("/");
         String key = args.substring(args.lastIndexOf(">") + 1).trim();
         Node preNode = tree.currentNode;
 
-        if (args.contains(">")) {
-            JFrame frame = new JFrame(key);
-            JTextArea txtarFile = new JTextArea(20, 40);
-            JScrollPane scrlpaneFile = new JScrollPane(txtarFile);
-            JPanel mainPanel = new JPanel();
-            JButton save = new JButton("Save");
-
-            mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
-            frame.setLayout(new GridLayout(1, 0));
-            frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-            mainPanel.add(scrlpaneFile);
-            frame.add(mainPanel);
-            mainPanel.add(save);
-
-            if (args.contains(">>")) {
-                txtarFile.setText(tree.currentNode.children.get(key).info.getContents());
-
-                save.addActionListener((ActionEvent e) -> {
-                    saveFileContents(address, txtarFile, frame, key, false);
-                });
-
-                frame.pack();
-                frame.setVisible(true);
-            } else {
-
-                save.addActionListener((ActionEvent e) -> {
-                    saveFileContents(address, txtarFile, frame, key, true);
-                });
-
-                frame.pack();
-                frame.setVisible(true);
-            }
-        } else {
-            System.out.println("Invalid: arguments (missing '>' or '>>')");
+        if (address[0].equals("root")) {
+            tree.currentNode = tree.root;
         }
+
+        JFrame frame = new JFrame(key);
+        JTextArea txtarFile = new JTextArea(20, 40);
+        JScrollPane scrlpaneFile = new JScrollPane(txtarFile);
+        JPanel panel = new JPanel();
+        JButton save = new JButton("Save");
+
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        frame.setLayout(new GridLayout(1, 0));
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        panel.add(scrlpaneFile);
+        frame.add(panel);
+        panel.add(save);
+
+        save.addActionListener((ActionEvent e) -> {
+            saveFileContents(address, txtarFile, frame, key, true);
+        });
+
+        frame.pack();
+        frame.setVisible(true);
+
+        tree.currentNode = preNode;
+
     }
 
-    private void saveFileContents(String[] key, JTextArea txtar, Window frame, String filename, boolean isNewFile) {
+    private void appendFile(String args) {
+        String[] address = args.substring(args.lastIndexOf(">") + 1, 
+                args.length()).trim().split("/");
+        String key = args.substring(args.lastIndexOf(">") + 1).trim();
+        Node preNode = tree.currentNode;
+
+        if (address[0].equals("root")) {
+            tree.currentNode = tree.root;
+        }
+
+        JFrame frame = new JFrame(key);
+        JTextArea txtarFile = new JTextArea(20, 40);
+        JScrollPane scrlpaneFile = new JScrollPane(txtarFile);
+        JPanel panel = new JPanel();
+        JButton save = new JButton("Save");
+
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        frame.setLayout(new GridLayout(1, 0));
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        panel.add(scrlpaneFile);
+        frame.add(panel);
+        panel.add(save);
+
+        txtarFile.setText(tree.currentNode.files.get(key).info.getContents());
+
+        save.addActionListener((ActionEvent e) -> {
+            saveFileContents(address, txtarFile, frame, key, false);
+        });
+
+        frame.pack();
+        frame.setVisible(true);
+        
+        tree.currentNode = preNode;
+
+    }
+
+    private void editFile(String args) {
+        String[] address = args.substring(args.lastIndexOf(">") + 1, 
+                args.length()).trim().split("/");
+        String key = args.substring(args.lastIndexOf(">") + 1).trim();
+        Node preNode = tree.currentNode;
+
+        if (address[0].equals("root")) {
+            tree.currentNode = tree.root;
+        }
+
+        JFrame frame = new JFrame(key);
+        JTextArea txtarFile = new JTextArea(20, 40);
+        JScrollPane scrlpaneFile = new JScrollPane(txtarFile);
+        JPanel panel = new JPanel();
+        JButton save = new JButton("Save");
+
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        frame.setLayout(new GridLayout(1, 0));
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        panel.add(scrlpaneFile);
+        frame.add(panel);
+        panel.add(save);
+
+        txtarFile.setText(tree.currentNode.files.get(key).info.getContents());
+
+        save.addActionListener((ActionEvent e) -> {
+            saveFileContents(address, txtarFile, frame, key, false);
+        });
+
+        frame.pack();
+        frame.setVisible(true);
+        
+        tree.currentNode = preNode;
+    }
+
+    private void saveFileContents(String[] key, JTextArea txtar, 
+            Window frame, String filename, boolean isNewFile) {
         Date date = new Date();
         String contents = "";
         contents = txtar.getText();
@@ -449,21 +540,22 @@ class Simulation {
         } else {
             tree.updateFile(key, contents, date);
         }
-
+        
         frame.dispatchEvent(new WindowEvent(frame, WindowEvent.WINDOW_CLOSING));
     }
 
     private void showFile(String args) {
-        String[] address = args.split("/");
+        String[] address = args.substring(args.lastIndexOf(">") + 1, 
+                args.length()).trim().split("/");
         String key = args.substring(args.lastIndexOf(">") + 1).trim();
         Node preNode = tree.currentNode;
         JFrame frame = new JFrame(key);
         JTextArea txtarFile = new JTextArea(20, 40);
         JScrollPane scrlpaneFile = new JScrollPane(txtarFile);
-        JPanel mainPanel = new JPanel();
+        JPanel panel = new JPanel();
 
         if (!args.contains("/")) {
-            txtarFile.setText(tree.currentNode.children.get(key).info.getContents());
+            txtarFile.setText(tree.currentNode.files.get(key).info.getContents());
         } else {
             for (int i = 0; i < address.length; i++) {
 
@@ -471,11 +563,11 @@ class Simulation {
         }
 
         txtarFile.setEditable(false);
-        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         frame.setLayout(new GridLayout(1, 0));
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        mainPanel.add(scrlpaneFile);
-        frame.add(mainPanel);
+        panel.add(scrlpaneFile);
+        frame.add(panel);
 
         frame.pack();
         frame.setVisible(true);
@@ -484,12 +576,11 @@ class Simulation {
 
 public class File_system {
 
-    public static void main(String[] args) {
-        Date date = new Date();
-        Node root = new Node("root", null, date);
-        Tree tree = new Tree(root);
-        Simulation simulate = new Simulation(tree);
+    public static void main(String[] args) throws InterruptedException {
 
+        Tree tree = loadTree();
+        Simulation simulate = new Simulation(tree);
+        
         do {
             Scanner scan = new Scanner(System.in);
             String command;
@@ -497,8 +588,48 @@ public class File_system {
 
             command = scan.nextLine();
             simulate.takeCommand(command);
+            saveTree(tree);
 
         } while (!simulate.exit);
+
+    }
+
+    private static String saveTree(Tree tree) {
+        File f = new File("tree.ser");
+
+        try {
+            FileOutputStream fileOut = new FileOutputStream(f.getAbsoluteFile());
+            ObjectOutputStream output = new ObjectOutputStream(fileOut);
+            output.writeObject(tree);
+            fileOut.close();
+            output.close();
+        } catch (IOException i) {
+            System.out.println("Error writing file");
+        }
+
+        return f.getAbsolutePath();
+    }
+
+    private static Tree loadTree() {
+        Tree tree = null;
+
+        try {
+            FileInputStream fileIn = new FileInputStream("tree.ser");
+            ObjectInputStream in = new ObjectInputStream(fileIn);
+            tree = (Tree) in.readObject();
+            in.close();
+            fileIn.close();
+        } catch (IOException i) {
+            System.out.println("No existing file system found \n"
+                    + "Creating new file system");
+            Date date = new Date();
+            Node root = new Node("root", null, date);
+            tree = new Tree(root);
+        } catch (ClassNotFoundException c) {
+            System.out.println("Tree class not found.");
+        }
+
+        return tree;
     }
 
 }
