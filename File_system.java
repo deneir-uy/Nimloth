@@ -9,16 +9,19 @@ import java.awt.GridLayout;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.PrintWriter;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -35,6 +38,19 @@ import javax.swing.JTextArea;
  *
  * @author deneir-uy
  */
+class File_Writer {
+
+    public void write(String args) {
+        try (FileWriter fw = new FileWriter("mp3.out", true);
+                BufferedWriter bw = new BufferedWriter(fw);
+                PrintWriter out = new PrintWriter(bw)) {
+            out.println(args);
+        } catch (IOException e) {
+            System.out.println("Could not write on file");
+        }
+    }
+}
+
 class Node implements Serializable {
 
     Node parent;
@@ -59,40 +75,44 @@ class Node implements Serializable {
 
     public void listContents(String args) {
         int space = getLongestName() + 3;
-        String format = "%-" + Integer.toString(space) + "s%-9s%-22s%s%n";
+        String format = "%-" + Integer.toString(space) + "s%-9s%-22s%s";
         String pattern = "hh:mma MMM/dd/yyyy";
         SimpleDateFormat dateFormat = new SimpleDateFormat(pattern);
 
         children.entrySet().stream().map((entry) -> (Node) children.get(entry.getKey())).forEach((child) -> {
             if (Pattern.matches(args.replace("*", ".*"), child.info.getFilename())) {
-                System.out.printf(format, child.info.getFilename(), "Folder",
+                String output = String.format(format, child.info.getFilename(), "Folder",
                         dateFormat.format(child.info.getDateCreated()),
                         dateFormat.format(child.info.getDateLastModified()));
+                System.out.printf(output + "\n");
+                new File_Writer().write(output);
             }
         });
 
         files.entrySet().stream().map((entry) -> (Node) files.get(entry.getKey())).forEach((file) -> {
             if (Pattern.matches(args.replace("*", ".*"), file.info.getFilename())) {
-                System.out.printf(format, file.info.getFilename(), "File",
+                String output = String.format(format, file.info.getFilename(), "File",
                         dateFormat.format(file.info.getDateCreated()),
                         dateFormat.format(file.info.getDateLastModified()));
+                System.out.printf(output + "\n");
+                new File_Writer().write(output);
             }
         });
     }
 
-    private int getLongestName() {
+    public int getLongestName() {
         int longest = 0;
 
         Iterator iChildren = children.entrySet().iterator();
         Iterator iFiles = files.entrySet().iterator();
-        
+
         while (iChildren.hasNext()) {
             HashMap.Entry pair = (HashMap.Entry) iChildren.next();
             if (pair.getKey().toString().length() > longest) {
                 longest = pair.getKey().toString().length();
             }
         }
-        
+
         while (iFiles.hasNext()) {
             HashMap.Entry pair = (HashMap.Entry) iFiles.next();
             if (pair.getKey().toString().length() > longest) {
@@ -197,8 +217,15 @@ class Tree implements Serializable {
     public void makeDirectory(String[] key, Date date) {
         String name = key[key.length - 1].substring(key[key.length - 1].lastIndexOf(">") + 1).trim();
         if (key.length == 1) {
-            Node newNode = new Node(key[0].trim(), currentNode, date);
-            currentNode.children.put(key[0].trim(), newNode);
+            if(!currentNode.children.containsKey(name)){
+                Node newNode = new Node(name, currentNode, date);
+                currentNode.children.put(name, newNode);
+            }
+            else {
+                String output = "mkdir: " + name + ": Already exists";
+                System.out.println(output);
+                new File_Writer().write(output);
+            }
         } else {
 
             for (int i = 0; i < key.length - 1; i++) {
@@ -210,9 +237,17 @@ class Tree implements Serializable {
             if (currentNode == null) {
                 return;
             }
-
-            Node newNode = new Node(name, currentNode, date);
-            currentNode.children.put(name, newNode);
+            
+            if(!currentNode.children.containsKey(name)){
+                Node newNode = new Node(name, currentNode, date);
+                currentNode.children.put(name, newNode);
+            }
+            else {
+                String output = "mkdir: " + name + ": Already exists";
+                System.out.println(output);
+                new File_Writer().write(output);
+            }
+            
         }
     }
 
@@ -323,7 +358,9 @@ class Tree implements Serializable {
                 preNode.children.remove(filename);
                 preNode.parent.children.put(filename, moveNode);
             } else {
-                System.out.println(address[0] + ": no such directory found");
+                String output = address[0] + ": no such directory found";
+                System.out.println(output);
+                new File_Writer().write(output);
             }
         } else {
 
@@ -362,7 +399,9 @@ class Tree implements Serializable {
                 preNode.files.remove(filename);
                 preNode.parent.files.put(filename, moveNode);
             } else {
-                System.out.println(address[0] + ": no such directory found");
+                String output = address[0] + ": no such directory found";
+                System.out.println(output);
+                new File_Writer().write(output);
             }
         } else {
 
@@ -403,7 +442,12 @@ class Tree implements Serializable {
                 copyNode.updateDates();
                 preNode.parent.children.put(filename, copyNode);
             } else {
-                System.out.println(address[0] + ": no such directory found");
+                copyNode.info.setFilename(address[0]);
+                copyNode.key = address[0];
+                preNode.children.put(address[0], copyNode);
+//                String output = address[0] + ": no such directory found";
+//                System.out.println(output);
+//                new File_Writer().write(output);
             }
         } else {
 
@@ -520,36 +564,61 @@ class Tree implements Serializable {
             if (toChange.info.isDirectory) {
                 return toChange;
             } else {
-                System.out.println(key + ": is not a directory");
+                String output = key + ": is not a directory";
+                System.out.println(output);
+                new File_Writer().write(output);
                 return null;
             }
         } else if (key.equals("root")) {
             return root;
         } else {
-            System.out.println(key + ": no such directory");
+            String output = key + ": no such directory";
+            System.out.println(output);
+            new File_Writer().write(output);
             return null;
         }
     }
 
-    private Node search(String[] key) {
-        Node searchNode = root;
+    public void search(String key, Node searchNode) {
 
-        for (String key1 : key) {
-            searchNode = searchNode.children.get(key1);
-        }
+        int space = searchNode.getLongestName() + 3;
+        String format = "%-" + Integer.toString(space) + "s%-9s%-22s%s";
+        String pattern = "hh:mma MMM/dd/yyyy";
+        SimpleDateFormat dateFormat = new SimpleDateFormat(pattern);
 
-        return searchNode;
+        searchNode.children.entrySet().stream().map((entry) -> (Node) searchNode.children.get(entry.getKey())).forEach((child) -> {
+            search(key, child);
+            if (Pattern.matches(key.replace("*", ".*"), child.info.getFilename())) {
+                String output = String.format(format, child.info.getFilename(), "Folder",
+                        dateFormat.format(child.info.getDateCreated()),
+                        dateFormat.format(child.info.getDateLastModified()));
+                System.out.printf(output + "\n");
+                new File_Writer().write(output);
+            }
+        });
+
+        searchNode.files.entrySet().stream().map((entry) -> (Node) searchNode.files.get(entry.getKey())).forEach((file) -> {
+            search(key, file);
+            if (Pattern.matches(key.replace("*", ".*"), file.info.getFilename())) {
+                String output = String.format(format, file.info.getFilename(), "File",
+                        dateFormat.format(file.info.getDateCreated()),
+                        dateFormat.format(file.info.getDateLastModified()));
+                System.out.printf(output + "\n");
+                new File_Writer().write(output);
+            }
+        });
 
     }
 }
 
-class Simulation {
+class Simulation implements WindowListener {
 
     String hostname;
     String path;
     String prompt;
     Tree tree;
     boolean exit;
+    boolean isEditorOpen;
 
     Simulation(Tree tree) {
         this.tree = tree;
@@ -558,6 +627,7 @@ class Simulation {
         this.path = tree.currentNode.key;
         this.prompt = "/" + hostname + path + "/ $ ";
         this.exit = false;
+        this.isEditorOpen = false;
     }
 
     public void showPrompt() {
@@ -616,12 +686,21 @@ class Simulation {
             case "cp":
                 copy(args);
                 break;
+            case "whereis":
+                search(args);
+                break;
             case "":
                 break;
             default:
-                System.out.println(cmd + ": command not found");
+                String output = (cmd + ": command not found");
+                System.out.println(output);
+                new File_Writer().write(output);
                 break;
         }
+    }
+
+    private void search(String args) {
+        tree.search(args, tree.root);
     }
 
     private void makeDirectory(String args) {
@@ -637,7 +716,9 @@ class Simulation {
             tree.makeDirectory(address, date);
             tree.currentNode = preNode;
         } else {
-            System.out.println("usage: mkdir <directory name>");
+            String output = "usage: mkdir <directory name>";
+            System.out.println(output);
+            new File_Writer().write(output);
         }
     }
 
@@ -653,7 +734,9 @@ class Simulation {
             tree.removeDirectory(address);
             tree.currentNode = preNode;
         } else {
-            System.out.println("usage: rmdir <directory name>");
+            String output = "usage: rmdir <directory name>";
+            System.out.println(output);
+            new File_Writer().write(output);
         }
     }
 
@@ -678,7 +761,9 @@ class Simulation {
                 }
             }
         } else {
-            System.out.println("usage: cd <directory name>");
+            String output = "usage: cd <directory name>";
+            System.out.println(output);
+            new File_Writer().write(output);
         }
 
     }
@@ -711,6 +796,7 @@ class Simulation {
     }
 
     private void createFile(String args) {
+        this.isEditorOpen = true;
         String[] address = args.substring(args.lastIndexOf(">") + 1,
                 args.length()).trim().split("/");
         String key = args.substring(args.lastIndexOf(">") + 1).trim();
@@ -732,6 +818,7 @@ class Simulation {
         panel.add(scrlpaneFile);
         frame.add(panel);
         panel.add(save);
+        frame.addWindowListener(this);
 
         save.addActionListener((ActionEvent e) -> {
             saveFileContents(address, txtarFile, frame, true);
@@ -760,6 +847,7 @@ class Simulation {
     }
 
     private void appendFile(String args) {
+        this.isEditorOpen = true;
         String[] address = args.substring(args.lastIndexOf(">") + 1,
                 args.length()).trim().split("/");
         Node preNode = tree.currentNode;
@@ -793,29 +881,31 @@ class Simulation {
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         panel.add(scrlpaneFile);
         frame.add(panel);
+        frame.addWindowListener(this);
         panel.add(save);
 
         if (tree.currentNode.files.containsKey(address[address.length - 1])) {
             txtarFile.setText(tree.currentNode.files.get(address[address.length - 1]).info.getContents());
+            txtarFile.setCaretPosition(txtarFile.getText().length());
+            frame.pack();
+            frame.setVisible(true);
         } else {
-            System.out.println(address[address.length - 1] + ": no such file");
-            tree.currentNode = preNode;
-            return;
+//            System.out.println(address[address.length - 1] + ": no such file");
+//            tree.currentNode = preNode;
+//            this.isEditorOpen = false;
+            createFile(args);
         }
-        txtarFile.setCaretPosition(txtarFile.getText().length());
 
         save.addActionListener((ActionEvent e) -> {
             saveFileContents(address, txtarFile, frame, false);
         });
-
-        frame.pack();
-        frame.setVisible(true);
 
         tree.currentNode = preNode;
 
     }
 
     private void editFile(String args) {
+        this.isEditorOpen = true;
         String[] address = args.substring(args.lastIndexOf(">") + 1,
                 args.length()).trim().split("/");
         Node preNode = tree.currentNode;
@@ -850,21 +940,22 @@ class Simulation {
         panel.add(scrlpaneFile);
         frame.add(panel);
         panel.add(save);
+        frame.addWindowListener(this);
 
         if (tree.currentNode.files.containsKey(address[address.length - 1])) {
             txtarFile.setText(tree.currentNode.files.get(address[address.length - 1]).info.getContents());
+            frame.pack();
+            frame.setVisible(true);
         } else {
-            System.out.println(address[address.length - 1] + ": no such file");
-            tree.currentNode = preNode;
-            return;
+//            System.out.println(address[address.length - 1] + ": no such file");
+//            tree.currentNode = preNode;
+//            this.isEditorOpen = false;
+            createFile(args);
         }
 
         save.addActionListener((ActionEvent e) -> {
             saveFileContents(address, txtarFile, frame, false);
         });
-
-        frame.pack();
-        frame.setVisible(true);
 
         tree.currentNode = preNode;
     }
@@ -887,6 +978,7 @@ class Simulation {
     }
 
     private void showFile(String args) {
+        this.isEditorOpen = true;
         String[] address = args.substring(args.lastIndexOf(">") + 1,
                 args.length()).trim().split("/");
         Node preNode = tree.currentNode;
@@ -919,18 +1011,22 @@ class Simulation {
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         panel.add(scrlpaneFile);
         frame.add(panel);
+        frame.addWindowListener(this);
         txtarFile.setEditable(false);
 
         if (tree.currentNode.files.containsKey(address[address.length - 1])) {
             txtarFile.setText(tree.currentNode.files.get(address[address.length - 1]).info.getContents());
+            String output = txtarFile.getText();
+            new File_Writer().write(output);
+            frame.pack();
+            frame.setVisible(true);
         } else {
-            System.out.println(address[address.length - 1] + ": no such file");
+            String output = address[address.length - 1] + ": no such file";
+            System.out.println(output);
+            new File_Writer().write(output);
             tree.currentNode = preNode;
-            return;
+            this.isEditorOpen = false;
         }
-
-        frame.pack();
-        frame.setVisible(true);
 
         tree.currentNode = preNode;
     }
@@ -953,12 +1049,16 @@ class Simulation {
             } else if (preNode.files.containsKey(filename)) {
                 tree.moveFile(filename, address, preNode);
             } else {
-                System.out.println("source_file/source_directory not found");
+                String output = "source_file/source_directory not found";
+                System.out.println(output);
+                new File_Writer().write(output);
             }
 
             tree.currentNode = preNode;
         } else {
-            System.out.println("usage: mv source_file/source_directory target_file/target_directory");
+            String output = "usage: mv source_file/source_directory target_file/target_directory";
+            System.out.println(output);
+            new File_Writer().write(output);
         }
 
         tree.currentNode = preNode;
@@ -976,11 +1076,15 @@ class Simulation {
             } else if (tree.currentNode.files.containsKey(filename)) {
                 tree.renameFile(filename, newFilename);
             } else {
-                System.out.println("source_file/source_directory not found");
+                String output = "source_file/source_directory not found";
+                System.out.println(output);
+                new File_Writer().write(output);
             }
 
         } else {
-            System.out.println("usage: rn <old_filename> <new_filename>");
+            String output = "usage: rn <old_filename> <new_filename>";
+            System.out.println(output);
+            new File_Writer().write(output);
         }
     }
 
@@ -1002,33 +1106,90 @@ class Simulation {
             } else if (preNode.files.containsKey(filename)) {
                 tree.copyFile(filename, address, preNode);
             } else {
-                System.out.println("source_file/source_directory not found");
+                String output = "source_file/source_directory not found";
+                System.out.println(output);
+                new File_Writer().write(output);
             }
 
             tree.currentNode = preNode;
         } else {
-            System.out.println("usage: cp source_file/source_directory target_file/target_directory");
+            String output = "usage: cp source_file/source_directory target_file/target_directory";
+            System.out.println(output);
+            new File_Writer().write(output);
         }
 
         tree.currentNode = preNode;
+    }
+
+    @Override
+    public void windowClosing(WindowEvent e) {
+        this.isEditorOpen = false;
+    }
+
+    @Override
+    public void windowOpened(WindowEvent e) {
+
+    }
+
+    @Override
+    public void windowClosed(WindowEvent e) {
+
+    }
+
+    @Override
+    public void windowIconified(WindowEvent e) {
+
+    }
+
+    @Override
+    public void windowDeiconified(WindowEvent e) {
+
+    }
+
+    @Override
+    public void windowActivated(WindowEvent e) {
+
+    }
+
+    @Override
+    public void windowDeactivated(WindowEvent e) {
+
     }
 
 }
 
 public class File_system {
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws InterruptedException, FileNotFoundException {
 
         Tree tree = loadTree();
         Simulation simulate = new Simulation(tree);
+        Scanner scan = new Scanner(System.in);
+        Scanner fileread = new Scanner(new File("mp3.in"));
+        String command;
+
+        while (fileread.hasNext()) {
+            command = fileread.nextLine();
+            simulate.showPrompt();
+            System.out.println(command);
+            simulate.takeCommand(command);
+
+            do {
+                System.out.print("");
+            } while (simulate.isEditorOpen);
+
+            saveTree(tree);
+        }
 
         do {
-            Scanner scan = new Scanner(System.in);
-            String command;
             simulate.showPrompt();
-
             command = scan.nextLine();
             simulate.takeCommand(command);
+
+            do {
+                System.out.print("");
+            } while (simulate.isEditorOpen);
+
             saveTree(tree);
 
         } while (!simulate.exit);
