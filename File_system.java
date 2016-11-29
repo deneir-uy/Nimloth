@@ -22,9 +22,11 @@ import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.regex.Pattern;
 import javax.swing.BoxLayout;
@@ -70,7 +72,9 @@ class Node implements Serializable {
     Node(String filename, Node parent, String contents, Date date) {
         this.parent = parent;
         this.info = new Descriptor(filename, contents, date);
-
+        this.children = new HashMap<>();
+        this.files = new HashMap<>();
+        this.key = filename;
     }
 
     public void listContents(String args) {
@@ -80,7 +84,13 @@ class Node implements Serializable {
         SimpleDateFormat dateFormat = new SimpleDateFormat(pattern);
 
         children.entrySet().stream().map((entry) -> (Node) children.get(entry.getKey())).forEach((child) -> {
-            if (Pattern.matches(args.replace("*", ".*"), child.info.getFilename())) {
+            if (args.isEmpty()) {
+                String output = String.format(format, child.info.getFilename(), "Folder",
+                        dateFormat.format(child.info.getDateCreated()),
+                        dateFormat.format(child.info.getDateLastModified()));
+                System.out.printf(output + "\n");
+                new File_Writer().write(output);
+            } else if (Pattern.matches(args.replaceAll("\\.", "\\\\.").replaceAll("\\*", ".*"), child.info.getFilename())) {
                 String output = String.format(format, child.info.getFilename(), "Folder",
                         dateFormat.format(child.info.getDateCreated()),
                         dateFormat.format(child.info.getDateLastModified()));
@@ -90,6 +100,14 @@ class Node implements Serializable {
         });
 
         files.entrySet().stream().map((entry) -> (Node) files.get(entry.getKey())).forEach((file) -> {
+            if (args.isEmpty()) {
+                String output = String.format(format, file.info.getFilename(), "File",
+                        dateFormat.format(file.info.getDateCreated()),
+                        dateFormat.format(file.info.getDateLastModified()));
+                System.out.printf(output + "\n");
+                new File_Writer().write(output);
+            }
+
             if (Pattern.matches(args.replace("*", ".*"), file.info.getFilename())) {
                 String output = String.format(format, file.info.getFilename(), "File",
                         dateFormat.format(file.info.getDateCreated()),
@@ -102,21 +120,23 @@ class Node implements Serializable {
 
     public int getLongestName() {
         int longest = 0;
-
-        Iterator iChildren = children.entrySet().iterator();
-        Iterator iFiles = files.entrySet().iterator();
-
-        while (iChildren.hasNext()) {
-            HashMap.Entry pair = (HashMap.Entry) iChildren.next();
-            if (pair.getKey().toString().length() > longest) {
-                longest = pair.getKey().toString().length();
+        if (this.key == null) {
+            return longest;
+        } else {
+            if (this.children != null) {
+                for (HashMap.Entry pair : children.entrySet()) {
+                    if (pair.getKey().toString().length() > longest) {
+                        longest = pair.getKey().toString().length();
+                    }
+                }
             }
-        }
 
-        while (iFiles.hasNext()) {
-            HashMap.Entry pair = (HashMap.Entry) iFiles.next();
-            if (pair.getKey().toString().length() > longest) {
-                longest = pair.getKey().toString().length();
+            if (this.files != null) {
+                for (HashMap.Entry pair : files.entrySet()) {
+                    if (pair.getKey().toString().length() > longest) {
+                        longest = pair.getKey().toString().length();
+                    }
+                }
             }
         }
 
@@ -217,11 +237,10 @@ class Tree implements Serializable {
     public void makeDirectory(String[] key, Date date) {
         String name = key[key.length - 1].substring(key[key.length - 1].lastIndexOf(">") + 1).trim();
         if (key.length == 1) {
-            if(!currentNode.children.containsKey(name)){
+            if (!currentNode.children.containsKey(name)) {
                 Node newNode = new Node(name, currentNode, date);
                 currentNode.children.put(name, newNode);
-            }
-            else {
+            } else {
                 String output = "mkdir: " + name + ": Already exists";
                 System.out.println(output);
                 new File_Writer().write(output);
@@ -237,17 +256,16 @@ class Tree implements Serializable {
             if (currentNode == null) {
                 return;
             }
-            
-            if(!currentNode.children.containsKey(name)){
+
+            if (!currentNode.children.containsKey(name)) {
                 Node newNode = new Node(name, currentNode, date);
                 currentNode.children.put(name, newNode);
-            }
-            else {
+            } else {
                 String output = "mkdir: " + name + ": Already exists";
                 System.out.println(output);
                 new File_Writer().write(output);
             }
-            
+
         }
     }
 
@@ -358,9 +376,14 @@ class Tree implements Serializable {
                 preNode.children.remove(filename);
                 preNode.parent.children.put(filename, moveNode);
             } else {
-                String output = address[0] + ": no such directory found";
-                System.out.println(output);
-                new File_Writer().write(output);
+//                String output = address[0] + ": no such directory found";
+//                System.out.println(output);
+//                new File_Writer().write(output);
+                moveNode.key = address[address.length - 1];
+                moveNode.info.setFilename(address[address.length - 1]);
+                moveNode.parent.children.remove(filename);
+                moveNode.parent = currentNode;
+                currentNode.children.put(address[address.length - 1], moveNode);
             }
         } else {
 
@@ -581,34 +604,30 @@ class Tree implements Serializable {
 
     public void search(String key, Node searchNode) {
 
-        int space = searchNode.getLongestName() + 3;
-        String format = "%-" + Integer.toString(space) + "s%-9s%-22s%s";
-        String pattern = "hh:mma MMM/dd/yyyy";
-        SimpleDateFormat dateFormat = new SimpleDateFormat(pattern);
+        if (searchNode.key != null) {
+            
+            if (searchNode.children != null) {
+                searchNode.children.entrySet().stream().map((entry) -> (Node) searchNode.children.get(entry.getKey())).forEach((child) -> {
+                    search(key, child);
 
-        searchNode.children.entrySet().stream().map((entry) -> (Node) searchNode.children.get(entry.getKey())).forEach((child) -> {
-            search(key, child);
-            if (Pattern.matches(key.replace("*", ".*"), child.info.getFilename())) {
-                String output = String.format(format, child.info.getFilename(), "Folder",
-                        dateFormat.format(child.info.getDateCreated()),
-                        dateFormat.format(child.info.getDateLastModified()));
-                System.out.printf(output + "\n");
+                });
+            }
+
+            if (searchNode.files != null) {
+                searchNode.files.entrySet().stream().map((entry) -> (Node) searchNode.files.get(entry.getKey())).forEach((file) -> {
+                    search(key, file);
+
+                });
+            }
+            
+            if (searchNode.key.equals(key)) {
+                String output = getPath(searchNode.key, searchNode);
+                System.out.println(output);
                 new File_Writer().write(output);
             }
-        });
-
-        searchNode.files.entrySet().stream().map((entry) -> (Node) searchNode.files.get(entry.getKey())).forEach((file) -> {
-            search(key, file);
-            if (Pattern.matches(key.replace("*", ".*"), file.info.getFilename())) {
-                String output = String.format(format, file.info.getFilename(), "File",
-                        dateFormat.format(file.info.getDateCreated()),
-                        dateFormat.format(file.info.getDateLastModified()));
-                System.out.printf(output + "\n");
-                new File_Writer().write(output);
-            }
-        });
-
+        }
     }
+
 }
 
 class Simulation implements WindowListener {
@@ -770,7 +789,7 @@ class Simulation implements WindowListener {
 
     private void listChildren(String args) {
         if (args.isEmpty()) {
-            tree.currentNode.listContents(".*");
+            tree.currentNode.listContents("");
         } else if (args.contains("/")) {
             String[] address = args.split("/");
             Node preNode = tree.currentNode;
@@ -786,7 +805,7 @@ class Simulation implements WindowListener {
             }
 
             if (tree.currentNode != null) {
-                tree.currentNode.listContents(".*");
+                tree.currentNode.listContents("");
             }
 
             tree.currentNode = preNode;
@@ -1180,7 +1199,6 @@ public class File_system {
 
             saveTree(tree);
         }
-
         do {
             simulate.showPrompt();
             command = scan.nextLine();
